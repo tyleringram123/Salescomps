@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template_string, request
 import pandas as pd
 import folium
@@ -5,17 +6,24 @@ from folium.plugins import MarkerCluster, FeatureGroupSubGroup
 import googlemaps
 
 # =====================================================
-# PRACTICE ONLY – HARD-CODED GOOGLE MAPS KEY
+# DIGITALOCEAN / LINUX-SAFE PATHS
 # =====================================================
-GMAPS_API_KEY = "AIzaSyBIcVzJwkW20rIbkqdi9Yfhpiog9fp8y4s"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Excel file lives in the SAME folder as this Map.py by default.
+# You can override on DigitalOcean by setting EXCEL_PATH env var.
+EXCEL_PATH = os.getenv("EXCEL_PATH", os.path.join(BASE_DIR, "All Sales Comps.xlsm"))
+SHEET_NAME = os.getenv("SHEET_NAME", "Source Data")
+
+# =====================================================
+# PRACTICE ONLY – HARD-CODED GOOGLE MAPS KEY (but DO can use env var)
+# =====================================================
+GMAPS_API_KEY = os.getenv("GMAPS_API_KEY", "AIzaSyBIcVzJwkW20rIbkqdi9Yfhpiog9fp8y4s")
 gmaps = googlemaps.Client(key=GMAPS_API_KEY)
 
 # =====================================================
 # DATA CONFIG
 # =====================================================
-EXCEL_PATH = r"\\laserver\rusers\tingram\Desktop\Wokring Sales Comps\Sales Comps\TA Sales Comps\Complete\All Sales Comps.xlsm"
-SHEET_NAME = "Source Data"
-
 LAT_COL_INDEX = 5      # F
 LON_COL_INDEX = 6      # G
 SALE_DATE_INDEX = 11   # L
@@ -66,7 +74,7 @@ app = Flask(__name__)
 # =====================================================
 # HELPERS
 # =====================================================
-def geocode_address(address):
+def geocode_address(address: str):
     try:
         result = gmaps.geocode(address)
         if result:
@@ -118,8 +126,12 @@ def build_popup(row):
             continue
         v = format_value(label, safe_iloc(row, idx))
         if v:
-            rows.append(f"<tr><td style='padding:3px 8px; white-space:nowrap;'><b>{label}</b></td>"
-                        f"<td style='padding:3px 8px;'>{v}</td></tr>")
+            rows.append(
+                f"<tr>"
+                f"<td style='padding:3px 8px; white-space:nowrap;'><b>{label}</b></td>"
+                f"<td style='padding:3px 8px;'>{v}</td>"
+                f"</tr>"
+            )
 
     return f"""
     <div style="min-width:260px;max-width:420px;">
@@ -129,6 +141,22 @@ def build_popup(row):
     </div>
     """
 
+def load_sales_comps_df():
+    # Helpful error if the file isn’t present on DO
+    if not os.path.exists(EXCEL_PATH):
+        raise FileNotFoundError(
+            f"Excel file not found at: {EXCEL_PATH}\n"
+            f"Put 'All Sales Comps.xlsm' in the same folder as Map.py, "
+            f"or set EXCEL_PATH as an environment variable."
+        )
+
+    df = pd.read_excel(EXCEL_PATH, sheet_name=SHEET_NAME, engine="openpyxl")
+    df["lat"] = pd.to_numeric(df.iloc[:, LAT_COL_INDEX], errors="coerce")
+    df["lon"] = pd.to_numeric(df.iloc[:, LON_COL_INDEX], errors="coerce")
+    df["year"] = df.iloc[:, SALE_DATE_INDEX].apply(get_sale_year)
+    df = df.dropna(subset=["lat", "lon"])
+    return df
+
 # =====================================================
 # ROUTE
 # =====================================================
@@ -137,11 +165,15 @@ def index():
     subject_address = request.form.get("address", "").strip()
     subject_location = geocode_address(subject_address) if subject_address else None
 
-    df = pd.read_excel(EXCEL_PATH, sheet_name=SHEET_NAME, engine="openpyxl")
-    df["lat"] = pd.to_numeric(df.iloc[:, LAT_COL_INDEX], errors="coerce")
-    df["lon"] = pd.to_numeric(df.iloc[:, LON_COL_INDEX], errors="coerce")
-    df["year"] = df.iloc[:, SALE_DATE_INDEX].apply(get_sale_year)
-    df = df.dropna(subset=["lat", "lon"])
+    try:
+        df = load_sales_comps_df()
+    except Exception as e:
+        # Render a simple readable error in the browser (super helpful on DO)
+        return (
+            f"<h2>App Error</h2><pre>{str(e)}</pre>"
+            f"<p>EXCEL_PATH currently: <code>{EXCEL_PATH}</code></p>",
+            500,
+        )
 
     # Center map on subject if provided
     if subject_location:
@@ -192,7 +224,8 @@ def index():
 
     folium.LayerControl(collapsed=False).add_to(m)
 
-    return render_template_string("""
+    return render_template_string(
+        """
     <html>
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -223,14 +256,6 @@ def index():
           cursor:pointer;
         }
 
-        .topbar .hint{
-          color:#555;
-          font-size: 12px;
-          white-space:nowrap;
-          overflow:hidden;
-          text-overflow:ellipsis;
-        }
-
         /* Map area below the fixed bar */
         .mapwrap{
           position: fixed;
@@ -259,12 +284,13 @@ def index():
     </body>
     </html>
     """,
-    map_html=m._repr_html_(),
-    subject_address=subject_address,
-    radius=CLUSTER_MAX_RADIUS,
-    zoom=CLUSTER_DISABLE_AT_ZOOM
+        map_html=m._repr_html_(),
+        subject_address=subject_address,
     )
 
-
+# NOTE:
+# In production on DigitalOcean, you run with gunicorn:
+#   gunicorn -c gunicorn_config.py Map:app
+# So this __main__ block is only for local testing.
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
