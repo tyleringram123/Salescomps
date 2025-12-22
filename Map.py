@@ -8,12 +8,12 @@ import googlemaps
 # =====================================================
 # DIGITALOCEAN / LINUX-SAFE PATHS
 # =====================================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
 # Excel file lives in the SAME folder as this Map.py by default.
 # You can override on DigitalOcean by setting EXCEL_PATH env var.
-EXCEL_PATH = os.getenv("EXCEL_PATH", os.path.join(BASE_DIR, "All Sales Comps.xlsm"))
-SHEET_NAME = os.getenv("SHEET_NAME", "Source Data")
+EXCEL_PATH = os.path.join(BASE_DIR, "All Sales Comps.xlsm")
+SHEET_NAME = "Source Data"
 
 # =====================================================
 # PRACTICE ONLY – HARD-CODED GOOGLE MAPS KEY (but DO can use env var)
@@ -21,6 +21,12 @@ SHEET_NAME = os.getenv("SHEET_NAME", "Source Data")
 GMAPS_API_KEY = os.getenv("GMAPS_API_KEY", "AIzaSyBIcVzJwkW20rIbkqdi9Yfhpiog9fp8y4s")
 gmaps = googlemaps.Client(key=GMAPS_API_KEY)
 
+if not os.path.isfile(EXCEL_PATH):
+    raise RuntimeError(
+        f"Excel file not found.\n"
+        f"Expected at: {EXCEL_PATH}\n"
+        f"Files in BASE_DIR: {os.listdir(BASE_DIR)}"
+    )
 # =====================================================
 # DATA CONFIG
 # =====================================================
@@ -294,3 +300,4 @@ def index():
 # So this __main__ block is only for local testing.
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
+
