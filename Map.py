@@ -76,7 +76,9 @@ CLUSTER_ZOOM_TO_BOUNDS = True  # zoom to cluster bounds when clicked
 # FLASK APP
 # =====================================================
 app = Flask(__name__)
-
+@app.get("/health")
+def health():
+    return "ok", 200
 # =====================================================
 # HELPERS
 # =====================================================
@@ -300,4 +302,5 @@ def index():
 # So this __main__ block is only for local testing.
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
+
 
