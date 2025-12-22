@@ -19,7 +19,7 @@ SHEET_NAME = os.getenv("SHEET_NAME", "Source Data")
 # =====================================================
 # PRACTICE ONLY – HARD-CODED GOOGLE MAPS KEY (DO can use env var)
 # =====================================================
-GMAPS_API_KEY = os.getenv("GMAPS_API_KEY", "YOUR_KEY_HERE")
+GMAPS_API_KEY = os.getenv("GMAPS_API_KEY", "AIzaSyBIcVzJwkW20rIbkqdi9Yfhpiog9fp8y4s")
 gmaps = googlemaps.Client(key=GMAPS_API_KEY) if GMAPS_API_KEY else None
 
 app = Flask(__name__)
@@ -264,3 +264,4 @@ if __name__ == "__main__":
     # Local dev only; DO uses gunicorn
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=True)
+
